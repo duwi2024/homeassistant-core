@@ -32,10 +32,10 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Ensure DOMAIN data has been initialized in Home Assistant
         self.hass.data.setdefault(DOMAIN, {})
+        placeholders = {}
 
         # Check if user has provided app_key and app_secret
         if user_input and user_input.get("app_key") and user_input.get("app_secret"):
-
             # Initialize account client with provided details
             lc = AccountClient(
                 app_key=user_input["app_key"],
@@ -48,10 +48,11 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Try to authenticate with given credentials
             status = await lc.auth(user_input["app_key"], user_input["app_secret"])
             # Process returned status codes and handle potential errors
+            _LOGGER.debug(f"auth status: {status}")
             if status == Code.APP_KEY_ERROR.value:
                 errors["base"] = "auth_error"
-            elif status == Code.SIGN_ERROR.value:
-                errors["base"] = "sign_error"
+                placeholders["input"] = "app_key or app_secret"
+                placeholders["code"] = status
             elif status == Code.SYS_ERROR.value:
                 errors["base"] = "sys_error"
             elif status == Code.SUCCESS.value:
@@ -73,6 +74,7 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }
             ),
             errors=errors,
+            description_placeholders=placeholders,
         )
 
     async def async_step_auth(self, user_input=None):
@@ -83,8 +85,8 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         house information upon successful login, and transitions to house selection.
         """
         errors = {}
+        placeholders = {}
         if user_input and user_input.get("phone") and user_input.get("password"):
-
             # Access the stored app credentials from previous step
             app_key = self.hass.data[DOMAIN]["app_key"]
             app_secret = self.hass.data[DOMAIN]["app_secret"]
@@ -102,7 +104,6 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             # Perform the login with provided phone number and password
             status, auth_token = await lc.login(phone, password)
-
             # Process the login response and handle accordingly
             if status == Code.SUCCESS.value:
                 # Initiate HouseInfoClient for house info retrieval
@@ -116,10 +117,11 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
                 # Fetch the house information
                 status, house_infos = await hic.fetch_house_info()
-
+                placeholders = {}
                 if house_infos:
                     # Store house information and tokens in Home Assistant for use in further steps
                     self.hass.data[DOMAIN]["houses"] = house_infos
+                    self.hass.data[DOMAIN]["phone"] = phone
                     self.hass.data[DOMAIN]["access_token"] = auth_token.access_token
                     self.hass.data[DOMAIN]["refresh_token"] = auth_token.refresh_token
                     # Move to the next configuration step to select a house
@@ -127,12 +129,14 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 else:
                     # Handle case where no houses are found
                     errors["base"] = "no_houses_found_error"
+
             elif status == Code.LOGIN_ERROR.value:
                 # Handle login error status
                 errors["base"] = "invalid_auth"
             elif status == Code.SYS_ERROR.value:
                 # Handle system error status
                 errors["base"] = "sys_error"
+                placeholders["code"] = status
             else:
                 # Handle unknown error status
                 errors["base"] = "unknown_error"
@@ -147,6 +151,7 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }
             ),
             errors=errors,
+            description_placeholders=placeholders,
         )
 
     async def async_step_select_house(self, user_input=None):
@@ -159,7 +164,8 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Placeholder for error messages.
         errors = {}
-
+        # Placeholders for description placeholders.
+        placeholders = {}
         # Extract houses data from Home Assistant.
         houses = self.hass.data[DOMAIN]["houses"]
         # Retrieve the list of pre-existing houses to exclude.
@@ -175,6 +181,7 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # If no houses remain, handle the error.
         if len(houses_list) == 0:
             errors["base"] = "no_houses_found_error"
+            placeholders["phone"] = self.hass.data[DOMAIN]["phone"]
 
         # With user's house selection, create an entry for the selected house.
         if user_input is not None:
@@ -199,4 +206,5 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }
             ),
             errors=errors,
+            description_placeholders=placeholders,
         )

@@ -15,7 +15,19 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import APP_VERSION, CLIENT_MODEL, CLIENT_VERSION, DOMAIN, MANUFACTURER
+from .const import (
+    APP_VERSION,
+    CLIENT_MODEL,
+    CLIENT_VERSION,
+    DOMAIN,
+    MANUFACTURER,
+    DEFAULT_ROOM,
+    DEBOUNCE,
+    APP_KEY,
+    APP_SECRET,
+    ACCESS_TOKEN,
+    SLAVE,
+)
 from .util import debounce, persist_messages_with_status_code
 
 # Initialize logger
@@ -33,17 +45,16 @@ async def async_setup_entry(
     # Check if the DUWI_DOMAIN is loaded and has house_no available
     if DOMAIN in hass.data and "house_no" in hass.data[DOMAIN][instance_id]:
         # Access the SWITCH devices from the domain storage
-        devices = hass.data[DOMAIN][instance_id]["devices"].get("SWITCH")
+        devices = hass.data[DOMAIN][instance_id].get("devices", {}).get("switch")
 
         # If there are devices present, proceed with entity addition
-        if devices is not None:
+        if devices:
             # Helper function to create DuwiSwitch entities
             def create_switch_entities(device_list):
                 return [
                     DuwiSwitch(
                         hass=hass,
                         instance_id=instance_id,
-                        unique_id=device.device_no,
                         device_name=device.device_name,
                         device_no=device.device_no,
                         house_no=device.house_no,
@@ -76,7 +87,6 @@ class DuwiSwitch(SwitchEntity):
         hass: HomeAssistant,
         instance_id: str,
         device_no: str,
-        unique_id: str,
         terminal_sequence: str,
         route_num: str,
         house_no: str,
@@ -86,45 +96,39 @@ class DuwiSwitch(SwitchEntity):
         available: bool,
         device_name: str,
         is_group: bool = False,
-        assumed: bool = False,
     ) -> None:
         """Initialize the Duwi Switch Entity."""
+        self._attr_available = available
+        self._attr_is_on = state
+        self._attr_unique_id = device_no
+
+        self._hass = hass
         self._device_no = device_no
-        self._unique_id = unique_id
         self._terminal_sequence = terminal_sequence
         self._route_num = route_num
         self._house_no = house_no
         self._room_name = room_name
         self._floor_name = floor_name
-
         self._instance_id = instance_id
-        self._is_on = state
-        self._available = available
         self._is_group = is_group
-        self._assumed = assumed
+        self._control = True
+        self.entity_id = f"switch.duwi_{device_no}"
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, unique_id)},
+            identifiers={(DOMAIN, device_no)},
             manufacturer=MANUFACTURER,
-            name=(
-                self._room_name + " "
-                if self._room_name is not None and self._room_name != ""
-                else ""
-            )
-            + device_name,
+            name=(self._room_name + " " if self._room_name else "") + device_name,
             suggested_area=(
                 self._floor_name + " " + self._room_name
-                if self._room_name is not None and self._room_name != ""
-                else "default room"
+                if self._room_name
+                else DEFAULT_ROOM
             ),
         )
 
-        self.hass = hass
-
         # Initialize Control Client
-        self.cc = ControlClient(
-            app_key=self.hass.data[DOMAIN][instance_id]["app_key"],
-            app_secret=self.hass.data[DOMAIN][instance_id]["app_secret"],
-            access_token=self.hass.data[DOMAIN][instance_id]["access_token"],
+        self._cc = ControlClient(
+            app_key=self._hass.data[DOMAIN][instance_id][APP_KEY],
+            app_secret=self._hass.data[DOMAIN][instance_id][APP_SECRET],
+            access_token=self._hass.data[DOMAIN][instance_id][ACCESS_TOKEN],
             app_version=APP_VERSION,
             client_version=CLIENT_VERSION,
             client_model=CLIENT_MODEL,
@@ -132,71 +136,48 @@ class DuwiSwitch(SwitchEntity):
         )
 
         # Initialize Control Device
-        self.cd = ControlDevice(device_no=self._device_no, house_no=self._house_no)
+        self._cd = ControlDevice(device_no=self._device_no, house_no=self._house_no)
 
-        # Store unique entity ID globally
-        self.entity_id = f"switch.duwi_{device_no}"
-        self.hass.data[DOMAIN][instance_id][unique_id] = {
-            "device_no": self._device_no,
+    async def async_added_to_hass(self):
+        # Storing the device number and the method to update the device state
+        self._hass.data[DOMAIN][self._instance_id][self._device_no] = {
             "update_device_state": self.update_device_state,
         }
-        if self.hass.data[DOMAIN][instance_id].get(self._terminal_sequence) is None:
-            self.hass.data[DOMAIN][instance_id][self._terminal_sequence] = {}
-        self.hass.data[DOMAIN][instance_id].setdefault("slave", {}).setdefault(
+
+        # If the slave goes offline, the corresponding device entity should also be taken offline
+        self._hass.data[DOMAIN][self._instance_id].setdefault(SLAVE, {}).setdefault(
             self._terminal_sequence, {}
         )[self._device_no] = self.update_device_state
 
-    @property
-    def unique_id(self) -> str:
-        """Return the unique ID of the entity."""
-        return self._unique_id
-
-    @property
-    def is_on(self) -> bool | None:
-        """Return true if the switch is on."""
-        return self._is_on
-
-    @property
-    def available(self) -> bool:
-        """Return the device's availability."""
-        return self._available
-
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
-        self._is_on = True
+        self._attr_is_on = True
         # Update HA State to 'on'
-        self.cd.add_param_info("switch", "on")
-        if not kwargs.get("is_scheduled", False):
-            status = await self.cc.control(self.cd)
-            if status == Code.SUCCESS.value:
-                self.async_write_ha_state()
-            else:
-                await persist_messages_with_status_code(hass=self.hass, status=status)
-        else:
-            await self.async_write_ha_state_with_debounce()
-        self.cd.remove_param_info()
+        self._cd.add_param_info("switch", "on")
+        await self.control_device()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off."""
-        self._is_on = False
+        self._attr_is_on = False
         # Update HA State to 'off'
-        self.cd.add_param_info("switch", "off")
+        self._cd.add_param_info("switch", "off")
         # Control the switch only if the action is not locked.
-        if not kwargs.get("is_scheduled", False):
-            status = await self.cc.control(self.cd)
+        await self.control_device()
+
+    async def control_device(self):
+        if self._control:
+            status = await self._cc.control(self._cd)
             if status == Code.SUCCESS.value:
                 self.async_write_ha_state()
             else:
-                await persist_messages_with_status_code(hass=self.hass, status=status)
+                await persist_messages_with_status_code(hass=self._hass, status=status)
         else:
             await self.async_write_ha_state_with_debounce()
-        self.cd.remove_param_info()
+        self._cd.remove_param_info()
 
-    async def update_device_state(
-        self, action: str = None, is_scheduled: bool = True, **kwargs: Any
-    ):
+    async def update_device_state(self, action: str = None, **kwargs: Any):
         """Update the device state."""
-        kwargs["is_scheduled"] = is_scheduled
+        self._control = False
         if action == "turn_on":
             await self.async_turn_on(**kwargs)
         elif action == "turn_off":
@@ -205,9 +186,11 @@ class DuwiSwitch(SwitchEntity):
             await self.async_toggle(**kwargs)
         else:
             if "available" in kwargs:
-                self._available = kwargs["available"]
-                self.async_write_ha_state()
+                self._attr_available = kwargs["available"]
+                self.schedule_update_ha_state()
+        self._control = True
 
-    @debounce(0.5)
+    @debounce(DEBOUNCE)
     async def async_write_ha_state_with_debounce(self):
+        """Write HA state with debounce."""
         self.async_write_ha_state()

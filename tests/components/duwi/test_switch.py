@@ -39,7 +39,6 @@ def mock_switch(hass: HomeAssistant, mock_dev_patcher):
     return DuwiSwitch(
         hass=hass,
         instance_id="test_instance",
-        unique_id="unique_id",
         device_name="device_name",
         device_no="device_no",
         house_no="house_no",

@@ -13,7 +13,8 @@
         'type': 'string',
       }),
     ]),
-    'description_placeholders': None,
+    'description_placeholders': dict({
+    }),
     'errors': dict({
     }),
     'flow_id': <ANY>,
@@ -38,7 +39,8 @@
         'type': 'string',
       }),
     ]),
-    'description_placeholders': None,
+    'description_placeholders': dict({
+    }),
     'errors': dict({
     }),
     'flow_id': <ANY>,
@@ -63,7 +65,8 @@
         'type': 'string',
       }),
     ]),
-    'description_placeholders': None,
+    'description_placeholders': dict({
+    }),
     'errors': dict({
       'base': 'invalid_auth',
     }),
