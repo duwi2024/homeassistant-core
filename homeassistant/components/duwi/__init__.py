@@ -5,41 +5,41 @@ import logging
 from typing import Any
 
 from duwi_smarthome_sdk.api.discover import DiscoverClient
-from duwi_smarthome_sdk.api.group import GroupClient
 from duwi_smarthome_sdk.api.floor import FloorInfoClient
+from duwi_smarthome_sdk.api.group import GroupClient
 from duwi_smarthome_sdk.api.room import RoomInfoClient
 from duwi_smarthome_sdk.api.terminal import TerminalClient
 from duwi_smarthome_sdk.api.ws import DeviceSynchronizationWS
-from duwi_smarthome_sdk.model.resp.device import Device
-from duwi_smarthome_sdk.model.resp.group import Group
 from duwi_smarthome_sdk.const.status import Code
 from duwi_smarthome_sdk.const.type_map import (
-    type_map,
     group_type_map,
     media_type_map,
     sensor_type_map,
+    type_map,
 )
+from duwi_smarthome_sdk.model.resp.device import Device
+from duwi_smarthome_sdk.model.resp.group import Group
+from websockets import WebSocketException
 
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
-from websockets import WebSocketException
 
 from .const import (
+    ACCESS_TOKEN,
+    APP_KEY,
+    APP_SECRET,
     APP_VERSION,
     CLIENT_MODEL,
     CLIENT_VERSION,
     DOMAIN,
-    SUPPORTED_PLATFORMS,
-    SENSOR_TYPE_DICT,
-    APP_KEY,
-    APP_SECRET,
-    ACCESS_TOKEN,
-    REFRESH_TOKEN,
-    HOUSE_NO,
-    SLAVE,
     HOST,
+    HOUSE_NO,
+    REFRESH_TOKEN,
+    SENSOR_TYPE_DICT,
+    SLAVE,
+    SUPPORTED_PLATFORMS,
 )
 from .util import persist_messages_with_status_code, tans_state
 
@@ -230,9 +230,9 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         # A map with main key : sensor
         hass.data[DOMAIN][instance_id]["devices"]["sensor"] = sensor_registry
         # A map with main key : binary_sensor
-        hass.data[DOMAIN][instance_id]["devices"][
-            "binary_sensor"
-        ] = binary_sensor_registry
+        hass.data[DOMAIN][instance_id]["devices"]["binary_sensor"] = (
+            binary_sensor_registry
+        )
 
     if groups_status == Code.SUCCESS.value:
         group_registry = setup_group_registry(
@@ -326,7 +326,7 @@ def setup_device_registry(
             sensor_list = sensor_type_map.get(device.device_sub_type_no)
             for duwi_sensor in sensor_list:
                 device_value: dict[str, Any] = device.value
-                sensor_info = SENSOR_TYPE_DICT.get(duwi_sensor, {})
+                sensor_info: dict[str, Any] = SENSOR_TYPE_DICT.get(duwi_sensor, {})
                 device_value.setdefault("unit_of_measurement", {})
                 device_value.setdefault("device_class", {})
                 device_value.setdefault("state_class", {})

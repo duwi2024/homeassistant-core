@@ -1,9 +1,10 @@
 """Utility methods for the Duwi Smart Hub integration."""
 
 import asyncio
+from collections.abc import Callable
 import json
 import logging
-from typing import Callable, Optional, Union, Any
+from typing import Any
 
 from duwi_smarthome_sdk.const.status import Code
 
@@ -100,43 +101,44 @@ async def tans_state(hass: HomeAssistant, instance_id: str, message: str):
         return
 
     # Prepare the action and attributes based on the message.
-    action = "turn_on" if msg.get("switch") != "off" else "turn_off"
+    action: str | None = "turn_on" if msg.get("switch") != "off" else "turn_off"
 
     attr_dict: dict[str, Any] = {}
 
     # Process light-specific attributes.
-    if msg.get("online"):
-        action = None
-        attr_dict["available"] = msg.get("online")
-    if msg.get("light"):
-        attr_dict["brightness"] = int(round(msg.get("light") / 100 * 255))
-    if msg.get("color_temp"):
-        color_temp_range = (
-            hass.data[DOMAIN][instance_id].get(device_no, {}).get("color_temp_range")
-        )
-        ct = 500 - (int(round(msg.get("color_temp"))) - color_temp_range[0]) * (
-            500 - 153
-        ) / (color_temp_range[1] - color_temp_range[0])
-        attr_dict["color_temp"] = int(ct)
-    if msg.get("color"):
-        color_info = msg.get("color")
-        hs_color = (color_info["h"], color_info["s"])
-        brightness = int((color_info["v"] / 100) * 255)
-        if brightness == 0:
-            action = "turn_off"
-        attr_dict["brightness"] = brightness
-        attr_dict["hs_color"] = hs_color
+    action = await handle_light_switch_prop(
+        action, attr_dict, device_no, hass, instance_id, msg
+    )
 
     # Process cover-specific attributes.
-    if msg.get("control_percent"):
-        action = "set_cover_position"
-        attr_dict["position"] = msg.get("control_percent")
-    if msg.get("light_angle") or msg.get("angle_degree"):
-        action = "set_cover_tilt_position"
-        angle = msg.get("light_angle", msg.get("angle_degree"))
-        attr_dict["tilt_position"] = (180 - angle if angle > 90 else angle) / 90 * 100
+    action = await handle_cover_properties(action, attr_dict, msg)
 
     # Process media-player-specific attributes.
+    action = await handle_media_props(action, attr_dict, msg)
+
+    # Update method for obtaining entities
+    device = hass.data[DOMAIN][instance_id][device_no]
+    update_device = device.get("update_device_state")
+    if not update_device:
+        _LOGGER.debug("No update_device_state")
+        return
+    # The situation where the device is divided into multiple entities
+    if isinstance(update_device, dict):
+        for key in DUWI_SENSOR_VALUE_REFLECT_HA_SENSOR_TYPE:
+            if key in msg:
+                attr_dict["state"] = msg.get(key)
+                callable_func = update_device.get(
+                    DUWI_SENSOR_VALUE_REFLECT_HA_SENSOR_TYPE.get(key)
+                )
+                if callable_func:
+                    await callable_func(action, **attr_dict)
+    else:
+        # Update entity status
+        await update_device(action=action, **attr_dict)
+
+
+async def handle_media_props(action, attr_dict, msg):
+    """Convert the data pushed by ws into local properties."""
     if msg.get("play"):
         if msg.get("play") == "on":
             action = "media_play"
@@ -185,35 +187,55 @@ async def tans_state(hass: HomeAssistant, instance_id: str, message: str):
         if msg.get("duration"):
             minutes, seconds = map(int, msg.get("duration", "00:00").split(":"))
             attr_dict["duration"] = minutes * 60 + seconds
-    else:
-        if msg.get("duration"):
-            action = "duration"
-            minutes, seconds = map(int, msg.get("duration", "00:00").split(":"))
-            attr_dict["duration"] = minutes * 60 + seconds
+    elif msg.get("duration"):
+        action = "duration"
+        minutes, seconds = map(int, msg.get("duration", "00:00").split(":"))
+        attr_dict["duration"] = minutes * 60 + seconds
+    return action
 
-    # Update method for obtaining entities
-    device = hass.data[DOMAIN][instance_id][device_no]
-    update_device = device.get("update_device_state")
-    if not update_device:
-        _LOGGER.debug("No update_device_state")
-        return
-    # The situation where the device is divided into multiple entities
-    if isinstance(update_device, dict):
-        for key in DUWI_SENSOR_VALUE_REFLECT_HA_SENSOR_TYPE:
-            if key in msg:
-                attr_dict["state"] = msg.get(key)
-                callable_func = update_device.get(
-                    DUWI_SENSOR_VALUE_REFLECT_HA_SENSOR_TYPE.get(key)
-                )
-                if callable_func:
-                    await callable_func(action, **attr_dict)
-    else:
-        # Update entity status
-        await update_device(action=action, **attr_dict)
+
+async def handle_cover_properties(action, attr_dict, msg):
+    """Convert the data pushed by ws into local properties."""
+    if msg.get("control_percent"):
+        action = "set_cover_position"
+        attr_dict["position"] = msg.get("control_percent")
+    if msg.get("light_angle") or msg.get("angle_degree"):
+        action = "set_cover_tilt_position"
+        angle = msg.get("light_angle", msg.get("angle_degree"))
+        attr_dict["tilt_position"] = (180 - angle if angle > 90 else angle) / 90 * 100
+    return action
+
+
+async def handle_light_switch_prop(
+    action, attr_dict, device_no, hass, instance_id, msg
+):
+    """Convert the data pushed by ws into local properties."""
+    if msg.get("online"):
+        action = None
+        attr_dict["available"] = msg.get("online")
+    if msg.get("light"):
+        attr_dict["brightness"] = int(round(msg.get("light") / 100 * 255))
+    if msg.get("color_temp"):
+        color_temp_range = (
+            hass.data[DOMAIN][instance_id].get(device_no, {}).get("color_temp_range")
+        )
+        ct = 500 - (int(round(msg.get("color_temp"))) - color_temp_range[0]) * (
+            500 - 153
+        ) / (color_temp_range[1] - color_temp_range[0])
+        attr_dict["color_temp"] = int(ct)
+    if msg.get("color"):
+        color_info = msg.get("color")
+        hs_color = (color_info["h"], color_info["s"])
+        brightness = int((color_info["v"] / 100) * 255)
+        if brightness == 0:
+            action = "turn_off"
+        attr_dict["brightness"] = brightness
+        attr_dict["hs_color"] = hs_color
+    return action
 
 
 async def persist_messages_with_status_code(
-    hass: HomeAssistant, status: Optional[str] = None, message: Optional[str] = None
+    hass: HomeAssistant, status: str | None = None, message: str | None = None
 ) -> None:
     """Persist messages with a specific status code."""
     messages = {

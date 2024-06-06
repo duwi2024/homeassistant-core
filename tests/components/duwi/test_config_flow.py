@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import pytest
+from syrupy.assertion import SnapshotAssertion
+
 from homeassistant import config_entries
 from homeassistant.components.duwi.const import DOMAIN
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
-
-import pytest
-from syrupy.assertion import SnapshotAssertion
 
 
 @pytest.mark.usefixtures(

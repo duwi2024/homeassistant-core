@@ -4,6 +4,7 @@ import logging
 from unittest.mock import patch
 
 import pytest
+
 from homeassistant.components.duwi import DOMAIN
 from homeassistant.components.duwi.switch import DuwiSwitch
 from homeassistant.core import HomeAssistant
@@ -21,7 +22,6 @@ async def duwi_hass_config(hass: HomeAssistant):
         "app_secret": "test_app_secret",
         "access_token": "test_access_token",
     }
-    yield
 
 
 @pytest.fixture(autouse=True)
