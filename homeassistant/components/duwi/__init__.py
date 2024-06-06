@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, cast
 
 from duwi_smarthome_sdk.api.discover import DiscoverClient
 from duwi_smarthome_sdk.api.floor import FloorInfoClient
@@ -230,9 +230,9 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         # A map with main key : sensor
         hass.data[DOMAIN][instance_id]["devices"]["sensor"] = sensor_registry
         # A map with main key : binary_sensor
-        hass.data[DOMAIN][instance_id]["devices"]["binary_sensor"] = (
-            binary_sensor_registry
-        )
+        hass.data[DOMAIN][instance_id]["devices"][
+            "binary_sensor"
+        ] = binary_sensor_registry
 
     if groups_status == Code.SUCCESS.value:
         group_registry = setup_group_registry(
@@ -326,7 +326,9 @@ def setup_device_registry(
             sensor_list = sensor_type_map.get(device.device_sub_type_no)
             for duwi_sensor in sensor_list:
                 device_value: dict[str, Any] = device.value
-                sensor_info: dict[str, Any] = SENSOR_TYPE_DICT.get(duwi_sensor, {})
+                sensor_info: dict[str, Any] = cast(
+                    dict[str, Any], SENSOR_TYPE_DICT.get(duwi_sensor, {})
+                )
                 device_value.setdefault("unit_of_measurement", {})
                 device_value.setdefault("device_class", {})
                 device_value.setdefault("state_class", {})

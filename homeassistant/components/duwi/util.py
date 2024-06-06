@@ -137,7 +137,7 @@ async def tans_state(hass: HomeAssistant, instance_id: str, message: str):
         await update_device(action=action, **attr_dict)
 
 
-async def handle_media_props(action, attr_dict, msg):
+async def handle_media_props(action: str, attr_dict: dict[str, Any], msg: dict):
     """Convert the data pushed by ws into local properties."""
     if msg.get("play"):
         if msg.get("play") == "on":
@@ -194,7 +194,7 @@ async def handle_media_props(action, attr_dict, msg):
     return action
 
 
-async def handle_cover_properties(action, attr_dict, msg):
+async def handle_cover_properties(action: str, attr_dict: dict[str, Any], msg: dict):
     """Convert the data pushed by ws into local properties."""
     if msg.get("control_percent"):
         action = "set_cover_position"
@@ -207,7 +207,12 @@ async def handle_cover_properties(action, attr_dict, msg):
 
 
 async def handle_light_switch_prop(
-    action, attr_dict, device_no, hass, instance_id, msg
+    action: str,
+    attr_dict: dict[str, Any],
+    device_no: str,
+    hass: HomeAssistant,
+    instance_id: str,
+    msg: dict,
 ):
     """Convert the data pushed by ws into local properties."""
     if msg.get("online"):

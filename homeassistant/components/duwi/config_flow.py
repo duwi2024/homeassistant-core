@@ -2,20 +2,20 @@
 
 import logging
 
-import voluptuous as vol
 from duwi_smarthome_sdk.api.account import AccountClient
 from duwi_smarthome_sdk.api.house import HouseInfoClient
 from duwi_smarthome_sdk.const.status import Code
+import voluptuous as vol
 
 from homeassistant import config_entries
 
 from .const import (
-    DOMAIN,
+    APP_KEY,
+    APP_SECRET,
     APP_VERSION,
     CLIENT_MODEL,
     CLIENT_VERSION,
-    APP_KEY,
-    APP_SECRET,
+    DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -29,12 +29,7 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     async def async_step_user(self, user_input=None):
-        """
-        Handle a flow initiated by the user.
-
-        This function tries to authenticate using the user-provided credentials (if any),
-        processes the server response, and navigates to the next configuration flow step accordingly.
-        """
+        """Handle a flow initiated by the user."""
 
         # Placeholder for error messages
         errors = {}
@@ -45,7 +40,6 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Check if user has provided app_key and app_secret
         if user_input and user_input.get(APP_KEY) and user_input.get(APP_SECRET):
-
             # Initialize account client with provided details
             lc = AccountClient(
                 app_key=user_input[APP_KEY],
@@ -87,16 +81,10 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_auth(self, user_input=None):
-        """
-        Handle the authentication step in the configuration flow.
-
-        This step authenticates the user with their phone number and password, fetches
-        house information upon successful login, and transitions to house selection.
-        """
+        """Handle the authentication step in the configuration flow."""
         errors = {}
         placeholders = {}
         if user_input and user_input.get("phone") and user_input.get("password"):
-
             # Access the stored app credentials from previous step
             app_key = self.hass.data[DOMAIN][APP_KEY]
             app_secret = self.hass.data[DOMAIN][APP_SECRET]
@@ -164,12 +152,7 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_select_house(self, user_input=None):
-        """
-        Handle the selection of a house by the user.
-
-        In this step, the function determines the list of houses the user can select from,
-        processes their selection, stores the selected house's details, and creates an entry for it.
-        """
+        """Handle the selection of a house by the user."""
 
         # Placeholder for error messages.
         errors = {}

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from duwi_smarthome_sdk.api.control import ControlClient
 from duwi_smarthome_sdk.const.status import Code
@@ -16,16 +16,16 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
+    ACCESS_TOKEN,
+    APP_KEY,
+    APP_SECRET,
     APP_VERSION,
     CLIENT_MODEL,
     CLIENT_VERSION,
+    DEBOUNCE,
+    DEFAULT_ROOM,
     DOMAIN,
     MANUFACTURER,
-    DEFAULT_ROOM,
-    DEBOUNCE,
-    APP_KEY,
-    APP_SECRET,
-    ACCESS_TOKEN,
     SLAVE,
 )
 from .util import debounce, persist_messages_with_status_code
@@ -178,7 +178,7 @@ class DuwiSwitch(SwitchEntity):
             await self.async_write_ha_state_with_debounce()
         self._cd.remove_param_info()
 
-    async def update_device_state(self, action: Optional[str] = None, **kwargs: Any):
+    async def update_device_state(self, action: str | None = None, **kwargs: Any):
         """Update the device state."""
         self._control = False
         if action == "turn_on":
@@ -187,10 +187,9 @@ class DuwiSwitch(SwitchEntity):
             await self.async_turn_off(**kwargs)
         elif action == "toggle":
             await self.async_toggle(**kwargs)
-        else:
-            if "available" in kwargs:
-                self._attr_available = kwargs["available"]
-                self.schedule_update_ha_state()
+        elif "available" in kwargs:
+            self._attr_available = kwargs["available"]
+            self.schedule_update_ha_state()
         self._control = True
 
     @debounce(DEBOUNCE)
