@@ -30,7 +30,7 @@
       "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
       "no_houses_found_error": "You have no houses available for addition were found in phone: {phone}",
       "sys_error": "System error, status code: {code}",
-      "unknown_error": "Something went wrong, place try again. "
+      "unknown_error": "[%key:common::config_flow::error::unknown_error%]"
     }
   }
 }

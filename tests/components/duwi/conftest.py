@@ -27,8 +27,7 @@ def mock_duwi_login_auth() -> Generator[AsyncMock, None, None]:
                 refresh_token_expire_time="mocked_refresh_token_expire_time",
             )
         # Simulate failed authentication
-        else:
-            return Code.LOGIN_ERROR.value, None
+        return Code.LOGIN_ERROR.value, None
 
     with patch(
         "duwi_smarthome_sdk.api.account.AccountClient.login", new_callable=MagicMock
@@ -49,9 +48,9 @@ def mock_duwi_login_user() -> Generator[AsyncMock, None, None]:
         # Define login logic simulation based on app_key and app_secret combinations
         if app_key == "correct_app_key" and app_secret == "correct_app_secret":
             return Code.SUCCESS.value
-        elif app_key == "error_app_key" and app_secret == "correct_app_secret":
+        if app_key == "error_app_key" and app_secret == "correct_app_secret":
             return Code.APP_KEY_ERROR.value
-        elif app_key == "correct_app_key" and app_secret == "error_app_secret":
+        if app_key == "correct_app_key" and app_secret == "error_app_secret":
             return Code.SIGN_ERROR.value
 
     with patch(

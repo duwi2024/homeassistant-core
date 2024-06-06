@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
 from duwi_smarthome_sdk.api.control import ControlClient
 from duwi_smarthome_sdk.const.status import Code
@@ -39,6 +39,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
+    """Set up the Duwi switch."""
     # Retrieve the instance ID from the configuration entry
     instance_id = config_entry.entry_id
 
@@ -70,7 +71,7 @@ async def async_setup_entry(
                 ]
 
             # Loop through each switch type ['On', 'Off', other types if exist] to create entities
-            for switch_type in devices.keys():
+            for switch_type in devices:
                 switch_entities = create_switch_entities(devices[switch_type])
                 async_add_entities(switch_entities)
 
@@ -139,6 +140,7 @@ class DuwiSwitch(SwitchEntity):
         self._cd = ControlDevice(device_no=self._device_no, house_no=self._house_no)
 
     async def async_added_to_hass(self):
+        """When entity is added to hass."""
         # Storing the device number and the method to update the device state
         self._hass.data[DOMAIN][self._instance_id][self._device_no] = {
             "update_device_state": self.update_device_state,
@@ -165,6 +167,7 @@ class DuwiSwitch(SwitchEntity):
         await self.control_device()
 
     async def control_device(self):
+        """Control the switch."""
         if self._control:
             status = await self._cc.control(self._cd)
             if status == Code.SUCCESS.value:
@@ -175,7 +178,7 @@ class DuwiSwitch(SwitchEntity):
             await self.async_write_ha_state_with_debounce()
         self._cd.remove_param_info()
 
-    async def update_device_state(self, action: str = None, **kwargs: Any):
+    async def update_device_state(self, action: Optional[str] = None, **kwargs: Any):
         """Update the device state."""
         self._control = False
         if action == "turn_on":

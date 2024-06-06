@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from typing import Dict, Any
 
 from duwi_smarthome_sdk.api.discover import DiscoverClient
 from duwi_smarthome_sdk.api.group import GroupClient
@@ -23,6 +24,7 @@ from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
+from websockets import WebSocketException
 
 from .const import (
     APP_VERSION,
@@ -39,7 +41,7 @@ from .const import (
     SLAVE,
     HOST,
 )
-from .util import persist_messages_with_status_code, trans_duwi_state_to_ha_state
+from .util import persist_messages_with_status_code, duwi_to_ha_state
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -73,7 +75,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     # Clear old data for this instance, if any.
     hass.data[DOMAIN].pop(instance_id, None)
-    terminals_dict = {}
+    terminals_dict: Dict[str, list] = {}
 
     hass.data[DOMAIN].setdefault(
         instance_id,
@@ -91,11 +93,11 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     entry_data = hass.data[DOMAIN][instance_id]
     entry_data.update(
         {
-            APP_KEY: config_entry.data.get(APP_KEY).strip(),
-            APP_SECRET: config_entry.data.get(APP_SECRET).strip(),
-            ACCESS_TOKEN: config_entry.data.get(ACCESS_TOKEN).strip(),
-            REFRESH_TOKEN: config_entry.data.get(REFRESH_TOKEN).strip(),
-            HOUSE_NO: config_entry.data.get(HOUSE_NO).strip(),
+            APP_KEY: config_entry.data.get(APP_KEY),
+            APP_SECRET: config_entry.data.get(APP_SECRET),
+            ACCESS_TOKEN: config_entry.data.get(ACCESS_TOKEN),
+            REFRESH_TOKEN: config_entry.data.get(REFRESH_TOKEN),
+            HOUSE_NO: config_entry.data.get(HOUSE_NO),
         }
     )
 
@@ -228,9 +230,9 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         # A map with main key : sensor
         hass.data[DOMAIN][instance_id]["devices"]["sensor"] = sensor_registry
         # A map with main key : binary_sensor
-        hass.data[DOMAIN][instance_id]["devices"]["binary_sensor"] = (
-            binary_sensor_registry
-        )
+        hass.data[DOMAIN][instance_id]["devices"][
+            "binary_sensor"
+        ] = binary_sensor_registry
 
     if groups_status == Code.SUCCESS.value:
         group_registry = setup_group_registry(
@@ -245,7 +247,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     # WebSocket callback for real-time device state updates.
     async def on_callback(message: str):
-        await trans_duwi_state_to_ha_state(hass, instance_id, message)
+        await duwi_to_ha_state(hass, instance_id, message)
 
     # Initialize WebSocket for real-time synchronization.
     ws_sync = DeviceSynchronizationWS(
@@ -283,7 +285,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         hass=hass,
         status=instance_id,
         message="Successfully initialized Duwi Smart Hub. Your house's name is: "
-        + config_entry.data.get("house_name"),
+        + config_entry.data.get("house_name", "unknown"),
     )
 
     return True
@@ -314,30 +316,31 @@ def setup_device_registry(
                 ).append(device)
                 continue
         # Media type
-        if device.device_sub_type_no in media_type_map.keys():
+        if device.device_sub_type_no in media_type_map:
             media_registry.setdefault(
                 media_type_map.get(device.device_sub_type_no), []
             ).append(device)
             continue
         # sensor and binary_sensor
-        if device.device_sub_type_no in sensor_type_map.keys():
+        if device.device_sub_type_no in sensor_type_map:
             sensor_list = sensor_type_map.get(device.device_sub_type_no)
             for duwi_sensor in sensor_list:
+                device_value: Dict[str, Dict[str, Any]] = device.value
                 sensor_info = SENSOR_TYPE_DICT.get(duwi_sensor, {})
-                device.value.setdefault("unit_of_measurement", {})
-                device.value.setdefault("device_class", {})
-                device.value.setdefault("state_class", {})
-                device.value.setdefault("option", {})
-                device.value["unit_of_measurement"][duwi_sensor] = sensor_info.get(
+                device_value.setdefault("unit_of_measurement", {})
+                device_value.setdefault("device_class", {})
+                device_value.setdefault("state_class", {})
+                device_value.setdefault("option", {})
+                device_value["unit_of_measurement"][duwi_sensor] = sensor_info.get(
                     "unit_of_measurement"
                 )
-                device.value["device_class"][duwi_sensor] = sensor_info.get(
+                device_value["device_class"][duwi_sensor] = sensor_info.get(
                     "device_class"
                 )
-                device.value["state_class"][duwi_sensor] = sensor_info.get(
+                device_value["state_class"][duwi_sensor] = sensor_info.get(
                     "state_class"
                 )
-                device.value["option"][duwi_sensor] = sensor_info.get("option")
+                device_value["option"][duwi_sensor] = sensor_info.get("option")
                 if sensor_info.get("type") == "sensor":
                     sensor_registry.setdefault(duwi_sensor, []).append(device)
                 elif sensor_info.get("type") == "binary_sensor":
@@ -391,9 +394,10 @@ async def async_remove_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
                         "WebSocket connection closed."
                     )  # Log successful disconnect.
                 except (
-                    Exception
+                    WebSocketException,
+                    asyncio.CancelledError,
                 ) as exc:  # Catch and log any exceptions during disconnect.
-                    _LOGGER.error(f"Error disconnecting WebSocket: {exc}")
+                    _LOGGER.error("Error disconnecting WebSocket: %s", exc)
 
             # Define an array of task names that the WebSocket may have started.
             for task_name in ["listen_task", "keep_alive_task", "refresh_token_task"]:
@@ -408,9 +412,9 @@ async def async_remove_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
                                 f"{task_name} cancellation completed."
                             )  # Confirm cancellation.
                         except (
-                            Exception
+                            WebSocketException
                         ) as exc:  # Catch any exceptions during cancellation.
-                            _LOGGER.error(f"Error in finalising {task_name}: {exc}")
+                            _LOGGER.error("Error in finalising %s: %s", task_name, exc)
                     else:
                         # If the task had already reached completion, log this information.
                         _LOGGER.debug(f"{task_name} was already completed.")

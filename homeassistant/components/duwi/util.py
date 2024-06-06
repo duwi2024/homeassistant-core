@@ -1,9 +1,9 @@
-"""Utility methods for the Duwi Smart Hub integration"""
+"""Utility methods for the Duwi Smart Hub integration."""
 
 import asyncio
 import json
 import logging
-from typing import Callable, Optional
+from typing import Callable, Optional, Union
 
 from duwi_smarthome_sdk.const.status import Code
 
@@ -18,9 +18,7 @@ from .const import DOMAIN, DUWI_SENSOR_VALUE_REFLECT_HA_SENSOR_TYPE
 _LOGGER = logging.getLogger(__name__)
 
 
-async def trans_duwi_state_to_ha_state(
-    hass: HomeAssistant, instance_id: str, message: str
-):
+async def duwi_to_ha_state(hass: HomeAssistant, instance_id: str, message: str):
     """Synchronize the entity's state in Home Assistant based on the received message."""
 
     # Ignore KEEPALIVE messages as they do not contain state information.
@@ -75,7 +73,7 @@ async def trans_duwi_state_to_ha_state(
             .get("is_follow_online")
             or not is_online
         ):
-            for device_no, handler in device_updates.items():
+            for handler in device_updates.values():
                 if callable(handler):
                     await handler(available=is_online)
             return
@@ -88,7 +86,7 @@ async def trans_duwi_state_to_ha_state(
                 )
 
                 if device_updates:
-                    for device_no, handler in device_updates.items():
+                    for handler in device_updates.values():
                         if callable(handler):
                             await handler(available=is_online)
         return
@@ -104,7 +102,7 @@ async def trans_duwi_state_to_ha_state(
     # Prepare the action and attributes based on the message.
     action = "turn_on" if msg.get("switch") != "off" else "turn_off"
 
-    attr_dict = {}
+    attr_dict: Dict[str, Any] = {}
 
     # Process light-specific attributes.
     if msg.get("online"):
@@ -204,9 +202,11 @@ async def trans_duwi_state_to_ha_state(
         for key in DUWI_SENSOR_VALUE_REFLECT_HA_SENSOR_TYPE:
             if key in msg:
                 attr_dict["state"] = msg.get(key)
-                await update_device.get(
+                callable_func = update_device.get(
                     DUWI_SENSOR_VALUE_REFLECT_HA_SENSOR_TYPE.get(key)
-                )(action, **attr_dict)
+                )
+                if callable_func:
+                    await callable_func(action, **attr_dict)
     else:
         # Update entity status
         await update_device(action=action, **attr_dict)
@@ -215,7 +215,7 @@ async def trans_duwi_state_to_ha_state(
 async def persist_messages_with_status_code(
     hass: HomeAssistant, status: Optional[str] = None, message: Optional[str] = None
 ) -> None:
-    """Persists messages with specific status code."""
+    """Persist messages with a specific status code."""
     messages = {
         Code.SUCCESS.value: "Success",
         Code.SYS_ERROR.value: "System Error",
@@ -242,10 +242,10 @@ async def persist_messages_with_status_code(
     )
 
 
-def debounce(wait: int or float) -> Callable:
-    """Decorator to debounce function calls."""
+def debounce(wait: Union[int, float]) -> Callable:
+    """Debounce function calls."""
 
-    def decorator(fn):
+    def decorator(fn: Callable) -> Callable:
         async def debounced_fn(self, *args, **kwargs):
             if hasattr(self, "_debounce_timer") and self._debounce_timer:
                 self._debounce_timer.cancel()

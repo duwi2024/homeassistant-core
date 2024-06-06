@@ -9,13 +9,22 @@ from duwi_smarthome_sdk.const.status import Code
 
 from homeassistant import config_entries
 
-from .const import DOMAIN, APP_VERSION, CLIENT_MODEL, CLIENT_VERSION
+from .const import (
+    DOMAIN,
+    APP_VERSION,
+    CLIENT_MODEL,
+    CLIENT_VERSION,
+    APP_KEY,
+    APP_SECRET,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 
 # Configuration class that handles flow initiated by the user for Duwi integration
 class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Duwi."""
+
     # Use version 1 for the configuration flow
     VERSION = 1
 
@@ -35,18 +44,19 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         placeholders = {}
 
         # Check if user has provided app_key and app_secret
-        if user_input and user_input.get("app_key") and user_input.get("app_secret"):
+        if user_input and user_input.get(APP_KEY) and user_input.get(APP_SECRET):
+
             # Initialize account client with provided details
             lc = AccountClient(
-                app_key=user_input["app_key"],
-                app_secret=user_input["app_secret"],
+                app_key=user_input[APP_KEY],
+                app_secret=user_input[APP_SECRET],
                 app_version=APP_VERSION,
                 client_version=CLIENT_VERSION,
                 client_model=CLIENT_MODEL,
             )
 
             # Try to authenticate with given credentials
-            status = await lc.auth(user_input["app_key"], user_input["app_secret"])
+            status = await lc.auth(user_input[APP_KEY], user_input[APP_SECRET])
             # Process returned status codes and handle potential errors
             _LOGGER.debug(f"auth status: {status}")
             if status == Code.APP_KEY_ERROR.value:
@@ -57,8 +67,8 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "sys_error"
             elif status == Code.SUCCESS.value:
                 # On success, Store credentials in Home Assistant and go to next configuration step
-                self.hass.data[DOMAIN]["app_key"] = user_input["app_key"]
-                self.hass.data[DOMAIN]["app_secret"] = user_input["app_secret"]
+                self.hass.data[DOMAIN][APP_KEY] = user_input[APP_KEY]
+                self.hass.data[DOMAIN][APP_SECRET] = user_input[APP_SECRET]
                 return await self.async_step_auth()
             else:
                 # Handle any other unexpected error status
@@ -69,8 +79,8 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required("app_key"): str,
-                    vol.Required("app_secret"): str,
+                    vol.Required(APP_KEY): str,
+                    vol.Required(APP_SECRET): str,
                 }
             ),
             errors=errors,
@@ -87,9 +97,10 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         placeholders = {}
         if user_input and user_input.get("phone") and user_input.get("password"):
+
             # Access the stored app credentials from previous step
-            app_key = self.hass.data[DOMAIN]["app_key"]
-            app_secret = self.hass.data[DOMAIN]["app_secret"]
+            app_key = self.hass.data[DOMAIN][APP_KEY]
+            app_secret = self.hass.data[DOMAIN][APP_SECRET]
             phone = user_input["phone"]
             password = user_input["password"]
 
@@ -192,8 +203,8 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "refresh_token": self.hass.data[DOMAIN]["refresh_token"],
                     "house_no": user_input["house_no"],
                     "house_name": houses_list[user_input["house_no"]],
-                    "app_key": self.hass.data[DOMAIN]["app_key"],
-                    "app_secret": self.hass.data[DOMAIN]["app_secret"],
+                    APP_KEY: self.hass.data[DOMAIN][APP_KEY],
+                    APP_SECRET: self.hass.data[DOMAIN][APP_SECRET],
                 },
             )
 
