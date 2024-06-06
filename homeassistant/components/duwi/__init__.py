@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Dict, Any
+from typing import Any
 
 from duwi_smarthome_sdk.api.discover import DiscoverClient
 from duwi_smarthome_sdk.api.group import GroupClient
@@ -41,7 +41,7 @@ from .const import (
     SLAVE,
     HOST,
 )
-from .util import persist_messages_with_status_code, duwi_to_ha_state
+from .util import persist_messages_with_status_code, tans_state
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     # Clear old data for this instance, if any.
     hass.data[DOMAIN].pop(instance_id, None)
-    terminals_dict: Dict[str, list] = {}
+    terminals_dict: dict[str, list] = {}
 
     hass.data[DOMAIN].setdefault(
         instance_id,
@@ -247,7 +247,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     # WebSocket callback for real-time device state updates.
     async def on_callback(message: str):
-        await duwi_to_ha_state(hass, instance_id, message)
+        await tans_state(hass, instance_id, message)
 
     # Initialize WebSocket for real-time synchronization.
     ws_sync = DeviceSynchronizationWS(
@@ -325,7 +325,7 @@ def setup_device_registry(
         if device.device_sub_type_no in sensor_type_map:
             sensor_list = sensor_type_map.get(device.device_sub_type_no)
             for duwi_sensor in sensor_list:
-                device_value: Dict[str, Dict[str, Any]] = device.value
+                device_value: dict[str, Any] = device.value
                 sensor_info = SENSOR_TYPE_DICT.get(duwi_sensor, {})
                 device_value.setdefault("unit_of_measurement", {})
                 device_value.setdefault("device_class", {})
@@ -409,15 +409,17 @@ async def async_remove_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
                             await task  # Wait for task to handle the cancellation.
                         except asyncio.CancelledError:  # Handle task cancellation.
                             _LOGGER.debug(
-                                f"{task_name} cancellation completed."
-                            )  # Confirm cancellation.
+                                "%s cancellation completed.", task_name
+                            )  # Confirm cancellation
                         except (
                             WebSocketException
                         ) as exc:  # Catch any exceptions during cancellation.
                             _LOGGER.error("Error in finalising %s: %s", task_name, exc)
                     else:
                         # If the task had already reached completion, log this information.
-                        _LOGGER.debug(f"{task_name} was already completed.")
+                        _LOGGER.debug(
+                            "%s was already completed.", task_name
+                        )  # Confirm cancellation
 
     # Finally, remove the entry's data from the domain's storage.
     hass.data[DOMAIN].pop(config_entry.entry_id, None)

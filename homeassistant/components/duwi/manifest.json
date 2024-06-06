@@ -8,6 +8,5 @@
   "loggers": ["duwi"],
   "integration_type": "hub",
   "issue_tracker": "https://github.com/home-assistant/core/issues",
-  "requirements": ["duwi_smarthome_sdk==0.2.2"],
-  "version": "0.1.0"
+  "requirements": ["duwi_smarthome_sdk==0.2.2"]
 }

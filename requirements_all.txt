@@ -750,7 +750,7 @@ dropmqttapi==1.0.3
 dsmr-parser==1.3.1
 
 # homeassistant.components.duwi
-duwi_smarthome_sdk==0.2.0
+duwi_smarthome_sdk==0.2.2
 
 # homeassistant.components.dwd_weather_warnings
 dwdwfsapi==1.0.7

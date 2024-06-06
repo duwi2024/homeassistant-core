@@ -58,7 +58,6 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Try to authenticate with given credentials
             status = await lc.auth(user_input[APP_KEY], user_input[APP_SECRET])
             # Process returned status codes and handle potential errors
-            _LOGGER.debug(f"auth status: {status}")
             if status == Code.APP_KEY_ERROR.value:
                 errors["base"] = "auth_error"
                 placeholders["input"] = "app_key or app_secret"
@@ -137,9 +136,8 @@ class DuwiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     self.hass.data[DOMAIN]["refresh_token"] = auth_token.refresh_token
                     # Move to the next configuration step to select a house
                     return await self.async_step_select_house()
-                else:
-                    # Handle case where no houses are found
-                    errors["base"] = "no_houses_found_error"
+                # Handle case where no houses are found
+                errors["base"] = "no_houses_found_error"
 
             elif status == Code.LOGIN_ERROR.value:
                 # Handle login error status

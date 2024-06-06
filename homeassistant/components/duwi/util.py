@@ -3,7 +3,7 @@
 import asyncio
 import json
 import logging
-from typing import Callable, Optional, Union
+from typing import Callable, Optional, Union, Any
 
 from duwi_smarthome_sdk.const.status import Code
 
@@ -18,7 +18,7 @@ from .const import DOMAIN, DUWI_SENSOR_VALUE_REFLECT_HA_SENSOR_TYPE
 _LOGGER = logging.getLogger(__name__)
 
 
-async def duwi_to_ha_state(hass: HomeAssistant, instance_id: str, message: str):
+async def tans_state(hass: HomeAssistant, instance_id: str, message: str):
     """Synchronize the entity's state in Home Assistant based on the received message."""
 
     # Ignore KEEPALIVE messages as they do not contain state information.
@@ -102,7 +102,7 @@ async def duwi_to_ha_state(hass: HomeAssistant, instance_id: str, message: str):
     # Prepare the action and attributes based on the message.
     action = "turn_on" if msg.get("switch") != "off" else "turn_off"
 
-    attr_dict: Dict[str, Any] = {}
+    attr_dict: dict[str, Any] = {}
 
     # Process light-specific attributes.
     if msg.get("online"):
@@ -242,7 +242,7 @@ async def persist_messages_with_status_code(
     )
 
 
-def debounce(wait: Union[int, float]) -> Callable:
+def debounce(wait: float) -> Callable:
     """Debounce function calls."""
 
     def decorator(fn: Callable) -> Callable:
